@@ -86,15 +86,6 @@ const LANGUAGES: { code: LangCode; flag: string; label: string }[] = [
 
 const DEFAULT_LANG: LangCode = "en-US";
 
-/**
- * NOTE ON SCOPE:
- * This dictionary covers all product "chrome" — nav, header, auth, modals,
- * labels, empty states. Mock challenge content (titles, descriptions, hints,
- * terminal output) is intentionally left in English, since in production
- * that content would come from a CMS/backend with its own per-locale fields
- * rather than being hardcoded in the frontend.
- */
-
 const en_US = {
   common: { search: "Search challenges…", success: "Done successfully!" },
   nav: {
@@ -312,8 +303,6 @@ const en_US = {
   },
 };
 
-// en-GB mirrors en-US almost exactly; only a couple of words differ in real
-// products (e.g. "customise"), none of which appear in this string set yet.
 const en_GB: typeof en_US = { ...en_US };
 
 const de: typeof en_US = {
@@ -577,4 +566,577 @@ const es: typeof en_US = {
   },
   language: { select: "Idioma" },
   landing: {
-    badge: "Aprende ciberseguridad. Cobr
+    badge: "Aprende ciberseguridad. Cobra por practicar.",
+    title: "Domina el hacking real. Desde tu navegador.",
+    subtitle:
+      "Resuelve desafíos de sandbox en vivo de Linux, seguridad web, contratos inteligentes y Python — y gana USDT real por cada uno que resuelvas.",
+    ctaPrimary: "Comenzar",
+    ctaSecondary: "Iniciar sesión",
+  },
+  catalog: {
+    title: "Desafíos",
+    subtitle: "Elige un sandbox, resuélvelo en vivo y cobra en cuanto se verifique.",
+  },
+  filters: { all: "Todos", linux: "Linux", web: "Seguridad web", smart: "Contratos inteligentes",/* ---------------------------------------------------------------------------- */
+/*  MOCK DATA
+    (source: lib/mock-data.ts)  */
+/* ---------------------------------------------------------------------------- */
+
+type Track = "linux" | "web" | "smart" | "python";
+type Difficulty = "easy" | "medium" | "hard";
+
+interface Challenge {
+  id: string;
+  track: Track;
+  difficulty: Difficulty;
+  title: string;
+  description: string;
+  objectives: string[];
+  hint: string;
+  rewardUsdt: number;
+  xp: number;
+  flag: string;
+  terminalIntro: string[];
+  terminalResponses: Record<string, string[]>;
+}
+
+const CHALLENGES: Challenge[] = [
+  {
+    id: "auth-log-hunt",
+    track: "linux",
+    difficulty: "easy",
+    title: "Auth Log Hunt",
+    description:
+      "A shared box has been fielding brute-force attempts. Dig through the auth log and pull out the flag left behind by the last successful login.",
+    objectives: [
+      "Inspect /var/log/auth.log for successful logins",
+      "Identify the session opened from an unfamiliar IP",
+      "Recover the flag embedded in that session's comment",
+    ],
+    hint: "grep for \"Accepted password\" and look at the line right after the last failed attempt streak.",
+    rewardUsdt: 15,
+    xp: 120,
+    flag: "CE{auth_log_9f21}",
+    terminalIntro: [
+      "Connected to sandbox: auth-log-hunt-01",
+      "Type `ls` to see what's here.",
+    ],
+    terminalResponses: {
+      ls: ["auth.log", "notes.txt"],
+      "cat notes.txt": ["Someone got in around 03:14 UTC. Check auth.log."],
+      "cat auth.log": [
+        "03:11:02 Failed password for root from 185.22.14.9",
+        "03:11:04 Failed password for root from 185.22.14.9",
+        "03:14:51 Accepted password for root from 185.22.14.9",
+        "# session-comment: CE{auth_log_9f21}",
+      ],
+      "grep Accepted auth.log": [
+        "03:14:51 Accepted password for root from 185.22.14.9",
+        "# session-comment: CE{auth_log_9f21}",
+      ],
+      whoami: ["ce-sandbox-user"],
+    },
+  },
+  {
+    id: "reflected-xss",
+    track: "web",
+    difficulty: "easy",
+    title: "Reflected Input",
+    description:
+      "The sandbox's feedback form echoes your input straight back onto the page. Prove you can make the page execute something it didn't expect, and read the flag from the admin's cookie note.",
+    objectives: [
+      "Find the parameter that gets reflected without escaping",
+      "Confirm you can break out of the surrounding HTML",
+      "Recover the flag left in the admin notice",
+    ],
+    hint: "Try submitting a value containing angle brackets and see what comes back in the response.",
+    rewardUsdt: 20,
+    xp: 150,
+    flag: "CE{reflected_7cd0}",
+    terminalIntro: [
+      "Connected to sandbox: reflected-input-01",
+      "Type `curl /feedback?msg=test` to inspect the endpoint.",
+    ],
+    terminalResponses: {
+      "curl /feedback?msg=test": [
+        '<div class="msg">test</div>',
+        "<!-- admin note: flag ships once you prove reflection -->",
+      ],
+      "curl /feedback?msg=<b>hi</b>": [
+        "<div class=\"msg\"><b>hi</b></div>",
+        "<!-- unescaped! admin note updated -->",
+        "<!-- CE{reflected_7cd0} -->",
+      ],
+      ls: ["feedback.php", "admin_notes.txt"],
+      "cat admin_notes.txt": ["Reminder: sanitize msg param before next release."],
+    },
+  },
+  {
+    id: "vault-reentrancy",
+    track: "smart",
+    difficulty: "hard",
+    title: "Vault Reentrancy",
+    description:
+      "A toy vault contract lets you withdraw before it updates your balance. Drain it in the sandbox network to prove the exploit and reveal the flag stored in the deployer's log.",
+    objectives: [
+      "Read the Vault contract's withdraw() function",
+      "Identify the missing checks-effects-interactions ordering",
+      "Trigger a reentrant withdrawal via the attacker contract",
+    ],
+    hint: "The balance is only zeroed out after the external call sends funds — call back in before that line runs.",
+    rewardUsdt: 45,
+    xp: 300,
+    flag: "CE{vault_reentry_3af9}",
+    terminalIntro: [
+      "Connected to sandbox: vault-reentrancy-01",
+      "Type `cat Vault.sol` to read the contract.",
+    ],
+    terminalResponses: {
+      "cat vault.sol": [
+        "function withdraw() public {",
+        "  (bool ok, ) = msg.sender.call{value: balances[msg.sender]}(\"\");",
+        "  require(ok);",
+        "  balances[msg.sender] = 0;",
+        "}",
+      ],
+      "cat vault.sol -v": [
+        "// deployer log:",
+        "// vault drained successfully -> CE{vault_reentry_3af9}",
+      ],
+      "deploy attacker.sol": ["Attacker contract deployed at 0xATT...01"],
+      "attacker.attack()": [
+        "Reentrant call #1 succeeded",
+        "Reentrant call #2 succeeded",
+        "Vault balance: 0 ETH",
+        "// CE{vault_reentry_3af9}",
+      ],
+    },
+  },
+  {
+    id: "pickled-secrets",
+    track: "python",
+    difficulty: "medium",
+    title: "Pickled Secrets",
+    description:
+      "A internal tool deserializes user-supplied data with pickle. Work out what that lets you do, and recover the flag the process was hiding in its environment.",
+    objectives: [
+      "Understand why unpickling untrusted input is dangerous",
+      "Craft a payload that runs during deserialization",
+      "Read the flag out of the process environment",
+    ],
+    hint: "__reduce__ lets a class control exactly what runs when it's unpickled.",
+    rewardUsdt: 25,
+    xp: 180,
+    flag: "CE{pickle_env_5b6e}",
+    terminalIntro: [
+      "Connected to sandbox: pickled-secrets-01",
+      "Type `cat service.py` to see what's running.",
+    ],
+    terminalResponses: {
+      "cat service.py": [
+        "import pickle",
+        "def handle(data):",
+        "    return pickle.loads(data)  # trusts caller input",
+      ],
+      "python3 exploit.py": [
+        "Sending crafted payload…",
+        "Payload deserialized on target",
+        "os.environ dump captured",
+      ],
+      "cat leaked_env.txt": ["FLAG=CE{pickle_env_5b6e}", "PATH=/usr/bin:/bin"],
+      env: ["FLAG=CE{pickle_env_5b6e}", "PATH=/usr/bin:/bin"],
+    },
+  },
+  {
+    id: "cron-privesc",
+    track: "linux",
+    difficulty: "medium",
+    title: "Cron Privesc",
+    description:
+      "A world-writable script runs on a schedule as root. Work out how to ride it to a higher-privileged shell and collect the flag it drops.",
+    objectives: [
+      "Find the cron job running with elevated privileges",
+      "Confirm the script it calls is writable by your user",
+      "Use it to read the root-only flag file",
+    ],
+    hint: "`ls -la` on the script referenced in the crontab tells you everything you need.",
+    rewardUsdt: 30,
+    xp: 220,
+    flag: "CE{cron_privesc_1d4a}",
+    terminalIntro: [
+      "Connected to sandbox: cron-privesc-01",
+      "Type `crontab -l` to see scheduled jobs.",
+    ],
+    terminalResponses: {
+      "crontab -l": ["*/5 * * * * root /opt/scripts/cleanup.sh"],
+      "ls -la /opt/scripts/cleanup.sh": [
+        "-rwxrwxrwx 1 root root 214 cleanup.sh",
+      ],
+      "cat /root/flag.txt": ["Permission denied"],
+      "echo 'cat /root/flag.txt > /tmp/out' >> /opt/scripts/cleanup.sh": [
+        "Waiting for the next cron tick…",
+      ],
+      "cat /tmp/out": ["CE{cron_privesc_1d4a}"],
+    },
+  },
+  {
+    id: "broken-jwt",
+    track: "web",
+    difficulty: "medium",
+    title: "Broken JWT",
+    description:
+      "This API trusts the alg field of the JWT it's handed. Forge a token that gets you admin access and reveals the flag on the admin endpoint.",
+    objectives: [
+      "Decode the JWT and inspect the header and payload",
+      "Switch the algorithm to none or forge a matching signature",
+      "Hit /admin with the forged token",
+    ],
+    hint: "Some JWT libraries will happily accept alg: none if the server never enforces an allow-list.",
+    rewardUsdt: 28,
+    xp: 200,
+    flag: "CE{jwt_alg_none_88c2}",
+    terminalIntro: [
+      "Connected to sandbox: broken-jwt-01",
+      "Type `curl /me -H \"Authorization: Bearer <token>\"` to check your session.",
+    ],
+    terminalResponses: {
+      "decode token": [
+        '{"alg":"HS256","typ":"JWT"}',
+        '{"user":"guest","admin":false}',
+      ],
+      "forge token": [
+        "Header alg set to none, signature stripped",
+        "New token ready",
+      ],
+      "curl /admin -H forged-token": [
+        "200 OK",
+        "Welcome, admin.",
+        "flag: CE{jwt_alg_none_88c2}",
+      ],
+    },
+  },
+];
+
+interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  country: string;
+  xp: number;
+  solved: number;
+}
+
+const LB_ADJ = [
+  "Shadow", "Null", "Cipher", "Ghost", "Byte", "Root", "Neon", "Vortex", "Static", "Phantom",
+  "Quantum", "Silent", "Crimson", "Obsidian", "Glitch", "Frost", "Iron", "Solar", "Lunar", "Vector",
+];
+const LB_NOUN = [
+  "Fox", "Wolf", "Hawk", "Serpent", "Raven", "Falcon", "Viper", "Panther", "Cobra", "Tiger",
+  "Eagle", "Lynx", "Drake", "Shark", "Owl",
+];
+const LB_FLAGS = [
+  "🇩🇪", "🇹🇷", "🇪🇸", "🇦🇿", "🇷🇺", "🇨🇳", "🇺🇸", "🇬🇧", "🇫🇷", "🇮🇹",
+  "🇧🇷", "🇮🇳", "🇯🇵", "🇰🇷", "🇨🇦", "🇦🇺", "🇳🇱", "🇸🇪", "🇵🇱", "🇺🇦",
+];
+
+/** Top 5 are curated; 6-100 are generated deterministically (same list on every load). */
+function buildTop100(): LeaderboardEntry[] {
+  const curated: LeaderboardEntry[] = [
+    { rank: 1, name: "n0xroot", country: "🇩🇪", xp: 48210, solved: 214 },
+    { rank: 2, name: "kismet_", country: "🇹🇷", xp: 46980, solved: 201 },
+    { rank: 3, name: "0xSalty", country: "🇪🇸", xp: 44510, solved: 197 },
+    { rank: 4, name: "gulnara.az", country: "🇦🇿", xp: 41200, solved: 183 },
+    { rank: 5, name: "reentry_king", country: "🇷🇺", xp: 39870, solved: 176 },
+  ];
+  const generated: LeaderboardEntry[] = [];
+  for (let rank = 6; rank <= 100; rank++) {
+    const i = rank - 6;
+    const name = `${LB_ADJ[i % LB_ADJ.length]}${LB_NOUN[(i * 3 + 1) % LB_NOUN.length]}${100 + rank}`;
+    const xp = Math.max(600, 39400 - (rank - 5) * 365);
+    const solved = Math.max(6, Math.round(xp / 205));
+    const country = LB_FLAGS[i % LB_FLAGS.length];
+    generated.push({ rank, name, country, xp, solved });
+  }
+  return [...curated, ...generated];
+}
+
+const TOP_100: LeaderboardEntry[] = buildTop100();
+
+const XP_PER_LEVEL = 1000;
+/** Flat demo bonus paid out for reaching the next level, shown in the XP modal. */
+const NEXT_LEVEL_BONUS_USDT = 5;
+
+/** Time-period filter for the leaderboard: purely cosmetic scaling of the same mock data. */
+type LeaderboardPeriod = "weekly" | "monthly" | "all";
+const LB_PERIOD_SCALE: Record<LeaderboardPeriod, number> = { weekly: 0.06, monthly: 0.25, all: 1 };
+
+/** Rank badge shown next to a player's name, derived from their XP. */
+type RankTierKey = "eliteHacker" | "redTeamer" | "bugHunter" | "pentester" | "rookie";
+function rankTierKey(xp: number): RankTierKey {
+  if (xp >= 40000) return "eliteHacker";
+  if (xp >= 20000) return "redTeamer";
+  if (xp >= 8000) return "bugHunter";
+  if (xp >= 2000) return "pentester";
+  return "rookie";
+}
+
+const AVATAR_PALETTE = ["#10b981", "#6366f1", "#f59e0b", "#ef4444", "#0ea5e9", "#a855f7", "#ec4899", "#14b8a6"];
+function colorForName(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+function MiniAvatar({ name, size = 20 }: { name: string; size?: number }) {
+  return (
+    <span
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "9999px",
+        background: colorForName(name),
+        fontSize: size * 0.5,
+      }}
+      className="inline-flex shrink-0 items-center justify-center font-bold text-white"
+    >
+      {name.trim().charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+interface HistoryEntry {
+  id: string;
+  kind: "reward" | "withdrawal" | "deposit";
+  title: string;
+  amount: number;
+  xp: number;
+  at: number;
+  status: "completed" | "pending";
+}
+
+type WithdrawMethod = "usdt" | "card";
+type WithdrawNetwork = "trc20" | "erc20" | "bep20";
+
+const MIN_WITHDRAW_USDT = 10;
+
+function maskAddress(value: string): string {
+  const v = value.trim();
+  if (v.length <= 10) return v;
+  return `${v.slice(0, 6)}…${v.slice(-4)}`;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function composeName(first: string, last: string): string {
+  return `${first} ${last}`.trim();
+}
+
+function initialOf(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "U";
+}
+
+interface AppUser {
+  firstName: string;
+  lastName: string;
+  name: string; // display name = firstName + lastName
+  email: string;
+  avatarUrl: string | null;
+  avatarInitial: string;
+  guest: boolean;
+  balanceUsdt: number;
+  xp: number;
+  solvedIds: string[];
+  history: HistoryEntry[];
+  level: number;
+  rank: number;
+  twoFactorEnabled: boolean;
+  twoFactorTarget: string;
+  emailNotifications: boolean;
+  browserNotifications: boolean;
+}
+
+function makeGuestUser(name: string, email: string, guest = false): AppUser {
+  const [first, ...rest] = name.trim().split(/\s+/);
+  const firstName = first || "User";
+  const lastName = rest.join(" ");
+  const displayName = composeName(firstName, lastName);
+  return {
+    firstName,
+    lastName,
+    name: displayName,
+    email,
+    avatarUrl: null,
+    avatarInitial: initialOf(displayName),
+    guest,
+    balanceUsdt: 0,
+    xp: 0,
+    solvedIds: [],
+    history: [],
+    level: 1,
+    rank: 8213,
+    twoFactorEnabled: false,
+    twoFactorTarget: "",
+    emailNotifications: true,
+    browserNotifications: true,
+  };
+}
+
+
+/* ---------------------------------------------------------------------------- */
+/*  APP CONTEXT
+    (source: lib/app-context.tsx)  */
+/* ---------------------------------------------------------------------------- */
+
+type DashboardTab = "overview" | "challenges" | "sandbox" | "leaderboard" | "wallet";
+type AuthMode = "login" | "register" | null;
+
+const PREFS_KEY = "cyberearn:prefs";
+const avatarKey = (email: string) => `cyberearn:avatar:${email.trim().toLowerCase()}`;
+
+function storageGet(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function storageSet(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // storage full / unavailable — ignore
+  }
+}
+function storageRemove(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+function readStoredPrefs(): Partial<Pick<AppUser, "emailNotifications" | "browserNotifications">> {
+  const raw = storageGet(PREFS_KEY);
+  if (!raw) return {};
+  try {
+    const p = JSON.parse(raw);
+    return {
+      ...(typeof p.emailNotifications === "boolean" ? { emailNotifications: p.emailNotifications } : {}),
+      ...(typeof p.browserNotifications === "boolean" ? { browserNotifications: p.browserNotifications } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+type MenuName = "lang" | "notif" | "profile";
+type CategoryFilter = "all" | Track;
+
+type StatModal = "wallet" | "xp" | "leaderboard" | null;
+
+interface AppContextValue {
+  lang: LangCode;
+  setLang: (lang: LangCode) => void;
+  t: typeof en_US;
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+  resolvedTheme: ResolvedTheme;
+  tokens: ThemeTokens;
+  user: AppUser | null;
+  isGuest: boolean;
+  login: (email: string, _password: string) => void;
+  register: (username: string, email: string, _password: string) => void;
+  continueAsGuest: () => void;
+  logout: () => void;
+  updateUser: (patch: Partial<AppUser>) => void;
+  markSolved: (challenge: Challenge) => void;
+  withdraw: (amount: number, method: WithdrawMethod, detail: string) => { ok: boolean; error?: string };
+  deposit: (amount: number) => { ok: boolean; error?: string };
+  authMode: AuthMode;
+  openAuth: (mode: Exclude<AuthMode, null>) => void;
+  closeAuth: () => void;
+  settingsOpen: boolean;
+  settingsTab: SettingsTab;
+  setSettingsTab: (tab: SettingsTab) => void;
+  openSettings: (tab?: SettingsTab) => void;
+  closeSettings: () => void;
+  /** Only one header dropdown can be open at a time. */
+  activeMenu: MenuName | null;
+  setActiveMenu: (menu: MenuName | null) => void;
+  /** Only one stat-card popup (wallet / XP / leaderboard) can be open at a time. */
+  statModal: StatModal;
+  openStatModal: (modal: Exclude<StatModal, null>) => void;
+  closeStatModal: () => void;
+  toast: { id: number; message: string } | null;
+  showToast: (message: string) => void;
+  view: "landing" | "dashboard";
+  goToDashboard: () => void;
+  goToLanding: () => void;
+  dashboardTab: DashboardTab;
+  setDashboardTab: (tab: DashboardTab) => void;
+  /** Lives in context (not in the catalog) so the filter bar never depends on which tab was visited. */
+  categoryFilter: CategoryFilter;
+  setCategoryFilter: (filter: CategoryFilter) => void;
+  activeChallengeId: string | null;
+  openChallenge: (id: string) => void;
+  successPayload: { rewardUsdt: number; xp: number } | null;
+  clearSuccess: () => void;
+}
+
+const AppContext = createContext<AppContextValue | null>(null);
+
+function useApp(): AppContextValue {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("useApp must be used within <AppProvider>");
+  return ctx;
+}
+
+function usePrefersDark(): boolean {
+  const [prefersDark, setPrefersDark] = useState(true);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setPrefersDark(mq.matches);
+    const listener = (e: MediaQueryListEvent) => setPrefersDark(e.matches);
+    mq.addEventListener?.("change", listener);
+    return () => mq.removeEventListener?.("change", listener);
+  }, []);
+  return prefersDark;
+}
+
+function AppProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLangState] = useState<LangCode>(DEFAULT_LANG);
+  const [theme, setThemeState] = useState<ThemeMode>("dark");
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("account");
+  const [activeMenu, setActiveMenu] = useState<MenuName | null>(null);
+  const [statModal, setStatModal] = useState<StatModal>(null);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
+  const [view, setView] = useState<"landing" | "dashboard">("landing");
+  const [dashboardTab, setDashboardTabRaw] = useState<DashboardTab>("challenges");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [activeChallengeId, setActiveChallengeId] = useState<string | null>(null);
+  const [successPayload, setSuccessPayload] = useState<{ rewardUsdt: number; xp: number } | null>(null);
+
+  const prefersDark = usePrefersDark();
+  const resolvedTheme: ResolvedTheme =
+    theme === "system" ? (prefersDark ? "dark" : "light") : theme;
+
+  // Toast auto-dismisses after 3 seconds; a later toast simply resets the timer.
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast((cur) => (cur && cur.id === toast.id ? null : cur)), 3000);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  const showToast = (message: string) => setToast({ id: Date.now(), message });
+
+  useEffect(() => {
+    try {
+      const savedLang = window.localStorage.getItem("cyberearn:lang") as LangCode | null;
+      const savedTheme = window.localStorage.getItem("cyberearn:theme") as ThemeMode | null;
+      if (savedLang && TRANSLATIONS[savedLang]) setLangState(savedLang);
+      if (savedTheme) setThemeState(savedTheme);
+    } catch {
+      // localStorage unavailable — fall back to defaults silently
+    }
+  }, []);
