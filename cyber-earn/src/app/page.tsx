@@ -1,26 +1,580 @@
+"use client";
 
-'use client';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  LayoutDashboard,
+  Swords,
+  Trophy,
+  Wallet,
+  Settings,
+  Bell,
+  ChevronDown,
+  Search,
+  Lock,
+  Lightbulb,
+  CheckCircle2,
+  X,
+  Terminal as TerminalIcon,
+  Flag,
+  ArrowLeft,
+  Zap,
+  Sun,
+  Moon,
+  Laptop,
+  SlidersHorizontal,
+  ShieldCheck,
+  RefreshCw,
+  LogOut,
+  User as UserIcon,
+  Check,
+  Eye,
+  EyeOff,
+  Globe,
+  CornerDownLeft,
+  type LucideIcon,
+} from "lucide-react";
 
-import Dashboard from '@/components/Dashboard';
-import Tasks from '@/components/Tasks';
-import Withdraw from '@/components/Withdraw';
+/**
+ * CyberEarn — Dashboard & Sandbox (single-file build)
+ * -----------------------------------------------------------------------
+ * Everything — i18n, theme tokens, mock data, context, and every
+ * sub-component (Header, Sidebar, AuthModal, SettingsModal,
+ * ChallengeCatalog, SandboxView, SuccessModal, panels) — lives in this one
+ * file so it can be dropped straight into app/dashboard/page.tsx and run
+ * with zero other local imports (only "react" and "lucide-react" are
+ * external dependencies).
+ *
+ * This is the same code as the modular version, concatenated in
+ * dependency order (data/i18n/theme → context → small controls → modals →
+ * header/sidebar → landing → catalog/sandbox/success → panels → page).
+ * For anything beyond a quick test, splitting this back into the
+ * multi-file structure is still the better long-term setup.
+ * -----------------------------------------------------------------------
+ */
 
-export default function Home() {
-  return (
-    <main className="min-h-screen bg-slate-900 text-white p-4 max-w-md mx-auto space-y-6 pb-20">
-      <header className="text-center py-4 border-b border-slate-800">
-        <h1 className="text-2xl font-bold text-cyan-400">Cyber Earn</h1>
-        <p className="text-xs text-slate-400">Complete tasks, earn LXR</p>
-      </header>
+/* ---------------------------------------------------------------------------- */
+/*  INTERNATIONALIZATION (i18n) — languages, translations, translate()
+    (source: lib/i18n.ts)  */
+/* ---------------------------------------------------------------------------- */
 
-      {/* User Dashboard & Balance */}
-      <Dashboard />
+type LangCode =
+  | "en-US"
+  | "en-GB"
+  | "az"
+  | "tr"
+  | "ru"
+  | "zh"
+  | "de"
+  | "es";
 
-      {/* Tasks List */}
-      <Tasks />
+const LANGUAGES: { code: LangCode; flag: string; label: string }[] = [
+  { code: "en-US", flag: "🇺🇸", label: "English (US)" },
+  { code: "en-GB", flag: "🇬🇧", label: "English (UK)" },
+  { code: "az", flag: "🇦🇿", label: "Azərbaycan" },
+  { code: "tr", flag: "🇹🇷", label: "Türkçe" },
+  { code: "ru", flag: "🇷🇺", label: "Русский" },
+  { code: "zh", flag: "🇨🇳", label: "中文" },
+  { code: "de", flag: "🇩🇪", label: "Deutsch" },
+  { code: "es", flag: "🇪🇸", label: "Español" },
+];
 
-      {/* Withdraw Section */}
-      <Withdraw />
-    </main>
-  );
-}
+const DEFAULT_LANG: LangCode = "en-US";
+
+/**
+ * NOTE ON SCOPE:
+ * This dictionary covers all product "chrome" — nav, header, auth, modals,
+ * labels, empty states. Mock challenge content (titles, descriptions, hints,
+ * terminal output) is intentionally left in English, since in production
+ * that content would come from a CMS/backend with its own per-locale fields
+ * rather than being hardcoded in the frontend.
+ */
+
+const en_US = {
+  common: { search: "Search challenges…", success: "Done successfully!" },
+  nav: {
+    dashboard: "Dashboard",
+    challenges: "Challenges / Sandboxes",
+    leaderboard: "Leaderboard",
+    wallet: "Wallet & Cashout",
+    settings: "Settings",
+  },
+  header: { signIn: "Sign in", getStarted: "Get started" },
+  auth: {
+    loginTitle: "Welcome back",
+    registerTitle: "Create your account",
+    email: "Email",
+    password: "Password",
+    confirmPassword: "Confirm password",
+    username: "Username",
+    loginButton: "Sign in",
+    registerButton: "Create account",
+    continueGuest: "Continue as guest",
+    noAccount: "Don't have an account?",
+    haveAccount: "Already have an account?",
+    orDivider: "or",
+    error: "Please fill in all fields.",
+    mismatch: "Passwords don't match.",
+  },
+  profile: {
+    profileSettings: "Profile settings",
+    settings: "Settings",
+    signOut: "Sign out",
+  },
+  notifications: {
+    title: "Notifications",
+    markAllRead: "Mark all as read",
+    item1:
+      'Your "Auth Log Hunt" submission was verified — $15.00 USDT credited.',
+    item2: "New sponsor bounty added to the Smart Contracts track.",
+    item3: "You climbed to rank #412 on the global leaderboard.",
+    item4: "Weekly payout batch processed successfully.",
+  },
+  language: { select: "Language" },
+  landing: {
+    badge: "Learn cybersecurity. Get paid to practice.",
+    title: "Master real-world hacking. In your browser.",
+    subtitle:
+      "Solve live sandbox challenges across Linux, web security, smart contracts, and Python — and earn real USDT for every one you crack.",
+    ctaPrimary: "Get started",
+    ctaSecondary: "Sign in",
+  },
+  catalog: {
+    title: "Challenges",
+    subtitle:
+      "Pick a sandbox, solve it live, and get paid the moment it's verified.",
+  },
+  filters: { all: "All", linux: "Linux", web: "Web Security", smart: "Smart Contracts", python: "Python" },
+  difficulty: { easy: "Easy", medium: "Medium", hard: "Hard" },
+  challenge: { start: "Start challenge" },
+  sandbox: {
+    back: "Back to challenges",
+    objectives: "Objectives",
+    hintShow: "Show hint",
+    hintHide: "Hide hint",
+    submitLabel: "Submit flag / solution",
+    verify: "Verify & claim reward",
+    wrongFlag: "That's not the right flag — check your output and try again.",
+  },
+  terminal: { live: "live", placeholder: "type a command…", send: "Send" },
+  success: {
+    title: "Challenge completed!",
+    usdt: "added to your balance",
+    xp: "XP earned",
+    back: "Back to challenges",
+  },
+  overview: {
+    welcome: "Welcome back",
+    subtitle: "Here's how your progress looks this week.",
+    statBalance: "Wallet balance",
+    statXp: "Total XP",
+    statSolved: "Challenges solved",
+    statRank: "Global rank",
+  },
+  placeholder: {
+    leaderboardTitle: "Leaderboard",
+    leaderboardNote: "Season 3 rankings refresh every Monday at 00:00 UTC.",
+    walletTitle: "Wallet & Cashout",
+    walletNote: "Cashouts settle within 24 hours.",
+    settingsTitle: "Settings",
+    settingsNote:
+      "Profile, notification, and security preferences live here.",
+  },
+  settingsModal: {
+    title: "Settings",
+    tabAccount: "Account",
+    tabPreferences: "App Preferences",
+    tabSecurity: "Security",
+    accountName: "Display name",
+    accountEmail: "Email",
+    accountRank: "Rank",
+    accountAvatar: "Profile picture",
+    accountAvatarChange: "Change avatar",
+    accountSave: "Save changes",
+    accountSaved: "Changes saved",
+    languageHint: "Choose the language used across menus, buttons, and messages.",
+    prefThemeLabel: "Theme",
+    themeDark: "Dark",
+    themeLight: "Light",
+    themeSystem: "System",
+    prefNotifLabel: "Notifications",
+    notifEmailLabel: "Email notifications",
+    notifBrowserLabel: "Browser notifications",
+    done: "Done",
+    accountFirstName: "First name",
+    accountLastName: "Last name",
+    accountAvatarRemove: "Remove",
+    accountAvatarHint: "PNG, JPG or WebP, up to 2 MB.",
+    accountAvatarInvalid: "Choose a PNG, JPG or WebP image up to 2 MB.",
+    accountEmailInvalid: "Enter a valid email address.",
+    accountNameRequired: "First name is required.",
+  },
+  security: {
+    title: "Security",
+    changePassword: "Change password",
+    currentPassword: "Current password",
+    newPassword: "New password",
+    confirmPassword: "Confirm new password",
+    updateButton: "Update password",
+    mismatch: "New passwords don't match.",
+    weakPassword: "New password must be at least 8 characters.",
+    success: "Password updated.",
+    twoFactor: "Two-factor authentication",
+    twoFactorOn: "Enabled",
+    twoFactorOff: "Disabled",
+    enableButton: "Enable 2FA",
+    disableButton: "Disable 2FA",
+  },
+  sidebar: {
+    nextTierTitle: "Next payout tier",
+    nextTierNote: "Reach level 15 to unlock $50+ sponsor bounties.",
+  },
+  twoFa: {
+    title: "Enable two-factor authentication",
+    guestEmailNote: "You can use any email address you have access to.",
+    intro: "We'll send a 6-digit code to the email address you registered with.",
+    sendCode: "Send code",
+    sending: "Sending…",
+    sentTo: "We sent a 6-digit code to",
+    codeLabel: "Verification code",
+    verify: "Verify & enable",
+    resend: "Resend code",
+    resendIn: "Resend in",
+    invalidCode: "That code isn't correct. Try again.",
+    tooMany: "Too many attempts. Request a new code.",
+    cancel: "Cancel",
+    back: "Back",
+    demoNote: "Demo mode — no server connected. Your code:",
+    enabledToast: "Two-factor authentication enabled!",
+  },
+  walletModal: {
+    title: "Wallet",
+    totalBalance: "Total balance",
+    withdraw: "Withdraw funds",
+    amount: "Amount (USDT)",
+    method: "Payout method",
+    methodUsdt: "Crypto (USDT)",
+    methodCard: "Bank card",
+    submit: "Request withdrawal",
+    historyTitle: "Transaction history",
+    historyEmpty: "No transactions yet.",
+    insufficientBalance: "You don't have enough balance for this withdrawal.",
+    invalidAmount: "Enter a valid amount.",
+    withdrawSuccess: "Withdrawal request sent!",
+    tabWithdraw: "Withdraw",
+    tabDeposit: "Deposit",
+    tabHistory: "History",
+    walletAddress: "Wallet address",
+    walletAddressCard: "Card number",
+    network: "Network",
+    networkTrc20: "TRC20",
+    networkErc20: "ERC20",
+    networkBep20: "BEP20",
+    minWithdraw: "Min. withdrawal: $10.00",
+    addressRequired: "Enter a wallet address or card number.",
+    belowMinimum: "Minimum withdrawal is $10.00.",
+    depositTitle: "Balance top-up",
+    depositAmount: "Amount (USDT)",
+    depositButton: "Add funds",
+    depositNote: "Demo top-up — instantly adds funds to your balance for testing.",
+    depositSuccess: "Balance topped up!",
+    statusCompleted: "Completed",
+    statusPending: "Pending",
+  },
+  xpModal: {
+    title: "Level & XP",
+    nextRewardTitle: "Next level reward",
+    nextRewardLabel: "Reach level {level}: +${amount} bonus & VIP badge",
+    currentLevel: "Current level",
+    nextLevel: "Next level",
+    progressLabel: "{cur} / {goal} XP to next level",
+    historyTitle: "XP earned",
+    historyEmpty: "Solve a challenge to start earning XP.",
+  },
+  leaderboardModal: {
+    title: "Top 100 leaderboard",
+    yourRank: "Your rank",
+    periodWeekly: "Weekly",
+    periodMonthly: "Monthly",
+    periodAll: "All-time",
+  },
+  rank: {
+    redTeamer: "Red Teamer",
+    bugHunter: "Bug Hunter",
+    pentester: "Pentester",
+    rookie: "Rookie",
+    eliteHacker: "Elite Hacker",
+  },
+};
+
+// en-GB mirrors en-US almost exactly; only a couple of words differ in real
+// products (e.g. "customise"), none of which appear in this string set yet.
+const en_GB: typeof en_US = { ...en_US };
+
+const de: typeof en_US = {
+  common: { search: "Challenges suchen…", success: "Erfolgreich ausgeführt!" },
+  nav: {
+    dashboard: "Dashboard",
+    challenges: "Challenges / Sandboxes",
+    leaderboard: "Bestenliste",
+    wallet: "Wallet & Auszahlung",
+    settings: "Einstellungen",
+  },
+  header: { signIn: "Anmelden", getStarted: "Loslegen" },
+  auth: {
+    loginTitle: "Willkommen zurück",
+    registerTitle: "Konto erstellen",
+    email: "E-Mail",
+    password: "Passwort",
+    confirmPassword: "Passwort bestätigen",
+    username: "Benutzername",
+    loginButton: "Anmelden",
+    registerButton: "Konto erstellen",
+    continueGuest: "Als Gast fortfahren",
+    noAccount: "Noch kein Konto?",
+    haveAccount: "Bereits ein Konto?",
+    orDivider: "oder",
+    error: "Bitte fülle alle Felder aus.",
+    mismatch: "Die Passwörter stimmen nicht überein.",
+  },
+  profile: {
+    profileSettings: "Profileinstellungen",
+    settings: "Einstellungen",
+    signOut: "Abmelden",
+  },
+  notifications: {
+    title: "Benachrichtigungen",
+    markAllRead: "Alle als gelesen markieren",
+    item1:
+      'Deine Einsendung „Auth Log Hunt" wurde verifiziert — 15,00 USDT gutgeschrieben.',
+    item2: "Neue Sponsor-Prämie im Bereich Smart Contracts.",
+    item3: "Du bist auf Rang #412 der globalen Bestenliste aufgestiegen.",
+    item4: "Wöchentliche Auszahlung erfolgreich verarbeitet.",
+  },
+  language: { select: "Sprache" },
+  landing: {
+    badge: "Cybersicherheit lernen. Fürs Üben bezahlt werden.",
+    title: "Echtes Hacking meistern. Direkt im Browser.",
+    subtitle:
+      "Löse Live-Sandbox-Challenges zu Linux, Websicherheit, Smart Contracts und Python — und verdiene echtes USDT für jede gelöste Aufgabe.",
+    ctaPrimary: "Loslegen",
+    ctaSecondary: "Anmelden",
+  },
+  catalog: {
+    title: "Challenges",
+    subtitle:
+      "Wähle eine Sandbox, löse sie live und werde sofort nach der Verifizierung bezahlt.",
+  },
+  filters: { all: "Alle", linux: "Linux", web: "Websicherheit", smart: "Smart Contracts", python: "Python" },
+  difficulty: { easy: "Leicht", medium: "Mittel", hard: "Schwer" },
+  challenge: { start: "Challenge starten" },
+  sandbox: {
+    back: "Zurück zu den Challenges",
+    objectives: "Ziele",
+    hintShow: "Hinweis anzeigen",
+    hintHide: "Hinweis ausblenden",
+    submitLabel: "Flag / Lösung einreichen",
+    verify: "Prüfen & Belohnung einlösen",
+    wrongFlag:
+      "Das ist nicht die richtige Flag — überprüfe deine Ausgabe und versuche es erneut.",
+  },
+  terminal: { live: "live", placeholder: "Befehl eingeben…", send: "Senden" },
+  success: {
+    title: "Challenge abgeschlossen!",
+    usdt: "deinem Guthaben gutgeschrieben",
+    xp: "XP erhalten",
+    back: "Zurück zu den Challenges",
+  },
+  overview: {
+    welcome: "Willkommen zurück",
+    subtitle: "So sieht dein Fortschritt diese Woche aus.",
+    statBalance: "Wallet-Guthaben",
+    statXp: "Gesamt-XP",
+    statSolved: "Gelöste Challenges",
+    statRank: "Globaler Rang",
+  },
+  placeholder: {
+    leaderboardTitle: "Bestenliste",
+    leaderboardNote:
+      "Die Season-3-Rangliste wird jeden Montag um 00:00 UTC aktualisiert.",
+    walletTitle: "Wallet & Auszahlung",
+    walletNote: "Auszahlungen werden innerhalb von 24 Stunden abgewickelt.",
+    settingsTitle: "Einstellungen",
+    settingsNote:
+      "Profil-, Benachrichtigungs- und Sicherheitseinstellungen findest du hier.",
+  },
+  settingsModal: {
+    title: "Einstellungen",
+    tabAccount: "Konto",
+    tabPreferences: "App-Einstellungen",
+    tabSecurity: "Sicherheit",
+    accountName: "Anzeigename",
+    accountEmail: "E-Mail",
+    accountRank: "Rang",
+    accountAvatar: "Profilbild",
+    accountAvatarChange: "Avatar ändern",
+    accountSave: "Änderungen speichern",
+    accountSaved: "Änderungen gespeichert",
+    languageHint: "Wähle die Sprache für Menüs, Schaltflächen und Meldungen.",
+    prefThemeLabel: "Erscheinungsbild",
+    themeDark: "Dunkel",
+    themeLight: "Hell",
+    themeSystem: "System",
+    prefNotifLabel: "Benachrichtigungen",
+    notifEmailLabel: "E-Mail-Benachrichtigungen",
+    notifBrowserLabel: "Browser-Benachrichtigungen",
+    done: "Fertig",
+    accountFirstName: "Vorname",
+    accountLastName: "Nachname",
+    accountAvatarRemove: "Entfernen",
+    accountAvatarHint: "PNG, JPG oder WebP, bis 2 MB.",
+    accountAvatarInvalid: "Wähle ein PNG-, JPG- oder WebP-Bild bis 2 MB.",
+    accountEmailInvalid: "Gib eine gültige E-Mail-Adresse ein.",
+    accountNameRequired: "Der Vorname ist erforderlich.",
+  },
+  security: {
+    title: "Sicherheit",
+    changePassword: "Passwort ändern",
+    currentPassword: "Aktuelles Passwort",
+    newPassword: "Neues Passwort",
+    confirmPassword: "Neues Passwort bestätigen",
+    updateButton: "Passwort aktualisieren",
+    mismatch: "Die neuen Passwörter stimmen nicht überein.",
+    weakPassword: "Das neue Passwort muss mindestens 8 Zeichen haben.",
+    success: "Passwort aktualisiert.",
+    twoFactor: "Zwei-Faktor-Authentifizierung",
+    twoFactorOn: "Aktiviert",
+    twoFactorOff: "Deaktiviert",
+    enableButton: "2FA aktivieren",
+    disableButton: "2FA deaktivieren",
+  },
+  sidebar: {
+    nextTierTitle: "Nächste Auszahlungsstufe",
+    nextTierNote: "Erreiche Level 15, um Sponsor-Prämien ab 50 $ freizuschalten.",
+  },
+  twoFa: {
+    title: "Zwei-Faktor-Authentifizierung aktivieren",
+    guestEmailNote: "Du kannst eine beliebige E-Mail-Adresse verwenden, auf die du Zugriff hast.",
+    intro: "Wir senden einen 6-stelligen Code an die E-Mail-Adresse, mit der du dich registriert hast.",
+    sendCode: "Code senden",
+    sending: "Wird gesendet…",
+    sentTo: "Wir haben einen 6-stelligen Code gesendet an",
+    codeLabel: "Bestätigungscode",
+    verify: "Bestätigen & aktivieren",
+    resend: "Code erneut senden",
+    resendIn: "Erneut senden in",
+    invalidCode: "Der Code ist falsch. Versuche es erneut.",
+    tooMany: "Zu viele Versuche. Fordere einen neuen Code an.",
+    cancel: "Abbrechen",
+    back: "Zurück",
+    demoNote: "Demo-Modus — kein Server verbunden. Dein Code:",
+    enabledToast: "Zwei-Faktor-Authentifizierung aktiviert!",
+  },
+  walletModal: {
+    title: "Wallet",
+    totalBalance: "Gesamtguthaben",
+    withdraw: "Geld auszahlen",
+    amount: "Betrag (USDT)",
+    method: "Auszahlungsmethode",
+    methodUsdt: "Krypto (USDT)",
+    methodCard: "Bankkarte",
+    submit: "Auszahlung beantragen",
+    historyTitle: "Transaktionsverlauf",
+    historyEmpty: "Noch keine Transaktionen.",
+    insufficientBalance: "Dein Guthaben reicht für diese Auszahlung nicht aus.",
+    invalidAmount: "Gib einen gültigen Betrag ein.",
+    withdrawSuccess: "Auszahlungsanfrage gesendet!",
+    tabWithdraw: "Auszahlen",
+    tabDeposit: "Einzahlen",
+    tabHistory: "Verlauf",
+    walletAddress: "Wallet-Adresse",
+    walletAddressCard: "Kartennummer",
+    network: "Netzwerk",
+    networkTrc20: "TRC20",
+    networkErc20: "ERC20",
+    networkBep20: "BEP20",
+    minWithdraw: "Min. Auszahlung: 10,00 $",
+    addressRequired: "Gib eine Wallet-Adresse oder Kartennummer ein.",
+    belowMinimum: "Die Mindestauszahlung beträgt 10,00 $.",
+    depositTitle: "Guthaben aufladen",
+    depositAmount: "Betrag (USDT)",
+    depositButton: "Guthaben hinzufügen",
+    depositNote: "Demo-Aufladung — fügt zu Testzwecken sofort Guthaben hinzu.",
+    depositSuccess: "Guthaben aufgeladen!",
+    statusCompleted: "Abgeschlossen",
+    statusPending: "Ausstehend",
+  },
+  xpModal: {
+    title: "Level & XP",
+    nextRewardTitle: "Belohnung für nächstes Level",
+    nextRewardLabel: "Erreiche Level {level}: +{amount} $ Bonus & VIP-Abzeichen",
+    currentLevel: "Aktuelles Level",
+    nextLevel: "Nächstes Level",
+    progressLabel: "{cur} / {goal} XP bis zum nächsten Level",
+    historyTitle: "Erhaltene XP",
+    historyEmpty: "Löse eine Challenge, um XP zu sammeln.",
+  },
+  leaderboardModal: {
+    title: "Top-100-Bestenliste",
+    yourRank: "Dein Rang",
+    periodWeekly: "Wöchentlich",
+    periodMonthly: "Monatlich",
+    periodAll: "Gesamt",
+  },
+  rank: {
+    redTeamer: "Red Teamer",
+    bugHunter: "Bug Hunter",
+    pentester: "Pentester",
+    rookie: "Anfänger",
+    eliteHacker: "Elite-Hacker",
+  },
+};
+
+const es: typeof en_US = {
+  common: { search: "Buscar desafíos…", success: "¡Hecho con éxito!" },
+  nav: {
+    dashboard: "Panel",
+    challenges: "Desafíos / Sandboxes",
+    leaderboard: "Clasificación",
+    wallet: "Billetera y retiros",
+    settings: "Ajustes",
+  },
+  header: { signIn: "Iniciar sesión", getStarted: "Comenzar" },
+  auth: {
+    loginTitle: "Bienvenido de nuevo",
+    registerTitle: "Crea tu cuenta",
+    email: "Correo electrónico",
+    password: "Contraseña",
+    confirmPassword: "Confirmar contraseña",
+    username: "Nombre de usuario",
+    loginButton: "Iniciar sesión",
+    registerButton: "Crear cuenta",
+    continueGuest: "Continuar como invitado",
+    noAccount: "¿No tienes una cuenta?",
+    haveAccount: "¿Ya tienes una cuenta?",
+    orDivider: "o",
+    error: "Por favor completa todos los campos.",
+    mismatch: "Las contraseñas no coinciden.",
+  },
+  profile: {
+    profileSettings: "Ajustes de perfil",
+    settings: "Ajustes",
+    signOut: "Cerrar sesión",
+  },
+  notifications: {
+    title: "Notificaciones",
+    markAllRead: "Marcar todo como leído",
+    item1:
+      'Tu envío "Auth Log Hunt" fue verificado — se acreditaron $15.00 USDT.',
+    item2: "Nueva recompensa de patrocinador añadida a Smart Contracts.",
+    item3: "Subiste al puesto #412 en la clasificación global.",
+    item4: "El pago semanal se procesó correctamente.",
+  },
+  language: { select: "Idioma" },
+  landing: {
+    badge: "Aprende ciberseguridad. Cobr
