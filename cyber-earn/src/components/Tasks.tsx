@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import WebApp from '@twa-dev/sdk';
 import { getOrCreateProfile } from '@/lib/supabaseClient';
 import {
-  claimTask,
+  claimTasks,
   ClaimError,
   fetchActiveTasks,
-  fetchCompletedTaskIds,
-  type Task,
+  fetchCompletedTasksIds,
+  type Tasks,
 } from '@/lib/tasksApi';
 
 /** Linkə kliklədikdən neçə saniyə sonra Claim aktiv olsun */
@@ -23,7 +23,7 @@ type LoadState =
 const formatLxr = (v: number) =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 
-function openTaskLink(url: string) {
+function openTasksLink(url: string) {
   if (/^https?:\/\/(t\.me|telegram\.me)\//i.test(url)) {
     WebApp.openTelegramLink(url);
   } else {
